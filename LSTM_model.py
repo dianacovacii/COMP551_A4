@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 import time
 
-class LSTM_Model(nn.Module):
+class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
         self.input_size = input_size
@@ -78,7 +78,7 @@ class LSTM_Model(nn.Module):
         out = self.fc(h_t)
         return out
 
-    def train_lstm(self, train_loader, val_loader, test_loader, epochs, optimizer, loss_fn, device):
+    def train_model(self, train_loader, val_loader, test_loader, epochs, optimizer, loss_fn, device):
         start_time = time.time()
 
         total_epochs = len(self.train_losses) + epochs
@@ -153,10 +153,16 @@ class LSTM_Model(nn.Module):
             
 
     def predict(self, x):
-        pass
+        self.eval()
+        with torch.no_grad():
+            outputs = self(x)
+            preds = torch.argmax(outputs, dim=1)
+        return preds
 
     def evaluate_acc(self, true, pred):
-        pass
+        correct = (true == pred).sum().item()
+        total = len(true)
+        return correct / total
     
 
     

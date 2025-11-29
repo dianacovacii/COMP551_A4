@@ -5,8 +5,15 @@ from torch.optim import Adam
 import time
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, hidden_size, output_size, embedding_matrix):
         super().__init__()
+
+        # Embedding Layer
+        # Converts Integer Indices (from WOS dataset) to Dense Vectors.
+        # We use from_pretrained to load your Word2Vec weights.
+        vocab_size, input_size = embedding_matrix.shape
+        self.embedding = nn.Embedding.from_pretrained(embedding_matrix, freeze=False)
+
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -33,6 +40,11 @@ class LSTMModel(nn.Module):
         nn.init.xavier_uniform_(self.hidden2gates.weight)
         nn.init.zeros_(self.input2gates.bias)
         nn.init.zeros_(self.hidden2gates.bias)
+        
+        # Initialize forget gate bias to 1.0 to help with long term dependencies
+        # The gates are chunked as: forget, input, memory, output
+        # So the first chunk corresponds to the forget gate
+        self.hidden2gates.bias.data[:self.hidden_size].fill_(1.0)
 
 
 
@@ -63,22 +75,50 @@ class LSTMModel(nn.Module):
         return updated_short_term_memory, updated_long_term_memory 
     
     def forward(self, x):
-        batch_size, seq_len, _ = x.size()
+        # x is indices [Batch, Seq_Len]. Convert to vectors [Batch, Seq_Len, Embed_Dim]
+        x_embedded = self.embedding(x)
+
+        batch_size, seq_len, _ = x_embedded.size()
         
         # Initialize hidden and cell states
         h_t = torch.zeros(batch_size, self.hidden_size).to(x.device)
         c_t = torch.zeros(batch_size, self.hidden_size).to(x.device)
 
+        # List to store hidden states at each time step
+        hidden_states = []
+
         # Process the input sequence
         for t in range(seq_len):
-            x_t = x[:, t, :]
+            x_t = x_embedded[:, t, :]
             h_t, c_t = self.lstm_cell(x_t, h_t, c_t)
+            hidden_states.append(h_t.unsqueeze(1))
 
-        # Pass last hidden state through the output layer
-        out = self.fc(h_t)
+        # Stack hidden states: [Batch, Seq_Len, Hidden_Size]
+        hidden_states = torch.cat(hidden_states, dim=1)
+
+        # Calculate actual lengths (ignoring padding index 0)
+        lengths = (x != 0).sum(dim=1)
+        
+        # Get the index of the last valid token for each sequence
+        # Clamp to 0 to handle potential empty sequences safely
+        last_valid_indices = (lengths - 1).clamp(min=0)
+        
+        # Select the hidden state at the last valid time step
+        batch_indices = torch.arange(batch_size).to(x.device)
+        last_h = hidden_states[batch_indices, last_valid_indices, :]
+
+        # Pass last valid hidden state through the output layer
+        out = self.fc(last_h)
         return out
 
-    def train_model(self, train_loader, val_loader, test_loader, epochs, optimizer, loss_fn, device):
+    def train_model(self, train_loader, val_loader, test_loader, epochs, optimizer, loss_fn, device, target_idx):
+        """
+        target_idx=1, Uses the first label set (YL1 / Domain)
+        target_idx=2, Uses the second label set (YL2 / Subfield)
+        """
+        if target_idx not in [1, 2]:
+            raise ValueError("target_idx must be 1 or 2")
+
         start_time = time.time()
 
         total_epochs = len(self.train_losses) + epochs
@@ -89,8 +129,10 @@ class LSTMModel(nn.Module):
             correct = 0
             total = 0
 
-            for inputs, labels in train_loader:
-                inputs, labels = inputs.to(device), labels.to(device)
+            for batch in train_loader:
+                inputs = batch[0].to(device)
+                # Select the domain or subdomain based on target_idx 
+                labels = batch[target_idx].to(device)
 
                 optimizer.zero_grad()  # Clear gradients from previous batch
                 
@@ -115,8 +157,11 @@ class LSTMModel(nn.Module):
             val_correct = 0
             val_total = 0
             with torch.no_grad():
-                for inputs, labels in val_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
+
+                for batch in val_loader:
+                    inputs = batch[0].to(device)
+                    # Select the domain or subdomain based on target_idx 
+                    labels = batch[target_idx].to(device)
                     
                     outputs = self(inputs)
                     loss = loss_fn(outputs, labels)
@@ -136,8 +181,10 @@ class LSTMModel(nn.Module):
             test_correct = 0
             test_total = 0
             with torch.no_grad():
-                for inputs, labels in test_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
+                for batch in test_loader:
+                    inputs = batch[0].to(device)
+                    # Select the domain or subdomain based on target_idx 
+                    labels = batch[target_idx].to(device)
                     
                     outputs = self(inputs)
 
@@ -163,7 +210,3 @@ class LSTMModel(nn.Module):
         correct = (true == pred).sum().item()
         total = len(true)
         return correct / total
-    
-
-    
-    

@@ -9,20 +9,27 @@ from data_loader import get_lstm_loaders
 
 # Contant variables
 LEARNING_RATE = 0.001
-model_name = f"lstm_model_lr_{LEARNING_RATE}"
-train_loader, val_loader, test_loader, embedding_matrix, vocab_size = get_lstm_loaders()
+EPOCHS = 20
+model_name = f"lstm_model_lr_{LEARNING_RATE}_{EPOCHS}"
+train_loader, val_loader, test_loader, embedding, vocab_size = get_lstm_loaders()
 
 # Set device
-device = torch.device("mps") if torch.backends.mps.is_available() else "cpu"
-if device == "cpu":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# quick device preference check used by your scripts
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
+print("Using device:", device)
 
 # Try to load existing model
 model = slm.load_model(model_name)
 if model is None:
-    model = LSTMModel(input_size=10, hidden_size=20, output_size=2)
+    model = LSTMModel(hidden_size=64, output_size=7, embedding_matrix=embedding)
     model.to(device)
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
     loss_fn = nn.CrossEntropyLoss()
-    model.train_model(train_loader, val_loader, test_loader, 5, optimizer, loss_fn, device)
+    model.train_model(train_loader, val_loader, test_loader, EPOCHS, optimizer, loss_fn, device, target_idx=1)
     slm.save_model(model, model_name)
+    print(model.train_time)

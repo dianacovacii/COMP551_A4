@@ -1,5 +1,6 @@
 import os
 import pickle
+import torch
 
 # Utility functions for saving and loading models
 # will use to cache experiments to avoid retraining models and to allow reproducible results
@@ -17,6 +18,9 @@ def save_model(model, filename, directory='saved_models'):
     if not os.path.exists(directory):
         os.makedirs(directory)
         
+    if hasattr(model, 'cpu'):
+        model = model.cpu()
+    
     filepath = os.path.join(directory, filename)
     with open(filepath, 'wb') as f:
         pickle.dump(model, f)

@@ -12,16 +12,8 @@ from data_loader import load_data, clean_and_tokenize
 
 def build_and_save_embeddings(data_dir="WOS11967", save_path="saved_models/embeddings.pkl", embedding_dim=100):
     print(f"Loading data from {data_dir}...")
-    try:
-        X, _, _ = load_data(data_dir)
-    except FileNotFoundError:
-        # Try looking in parent directory if running from subdir
-        if os.path.exists(os.path.join("..", data_dir)):
-             data_dir = os.path.join("..", data_dir)
-             X, _, _ = load_data(data_dir)
-        else:
-            raise
-
+    X, _, _ = load_data(data_dir)
+    
     print("Preprocessing data...")
     tokenized_X = [clean_and_tokenize(line) for line in X]
     word_frequency = Counter(word for line in tokenized_X for word in line)
@@ -31,6 +23,7 @@ def build_and_save_embeddings(data_dir="WOS11967", save_path="saved_models/embed
     word2idx = {word: idx for idx, word in enumerate(idx2word)}
     vocab_size = len(word2idx)
 
+    # Train a small Word2Vec model and build the embedding matrix
     print("Training Word2Vec...")
     w2v_model = Word2Vec(sentences=tokenized_X, vector_size=embedding_dim, min_count=1, sg=1)
 

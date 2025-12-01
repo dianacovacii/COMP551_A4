@@ -22,8 +22,8 @@ class BERTClassifier(nn.Module):
         self.test_accuracies = []
         self.train_time = 0
 
-    def forward(self, input_ids, attention_mask, labels=None):
-        output = self.bert(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+    def forward(self, input_ids, attention_mask, labels=None, output_attentions=False):
+        output = self.bert(input_ids=input_ids, attention_mask=attention_mask, labels=labels, output_attentions=output_attentions)
         return output
 
     def train_model(self, train_loader, val_loader, test_loader, epochs, optimizer, device, target_idx):

@@ -1,7 +1,7 @@
 from BERT_model import BERTClassifier
 import save_load_models as slm
 import torch
-from torch.optim import AdamW
+from torch.optim import Adam
 from data_loader import get_bert_loaders
 import os
 
@@ -39,7 +39,7 @@ def train_bert_experiment(target_name, target_idx, num_classes):
             model = BERTClassifier(output_size=num_classes)
             model.to(device)
             
-            optimizer = AdamW(model.parameters(), lr=lr)
+            optimizer = Adam(model.parameters(), lr=lr)
             
             model.train_model(bert_train_loader, bert_val_loader, bert_test_loader, EPOCHS, optimizer, device, target_idx=target_idx)
             
